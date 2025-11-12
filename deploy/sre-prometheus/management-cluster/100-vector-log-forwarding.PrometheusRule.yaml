@@ -19,7 +19,7 @@ spec:
     # Acceptable: 1.0-1.3 normal, <1.0 sustained indicates backup, >1.5 sustained warrants investigation
     - record: vector:log_delivery:success_ratio
       expr: |
-        sum(rate(vector_component_sent_events_total{component_id="hcp_logs"}[5m]))
+        sum(rate(vector_component_sent_events_total{component_id="s3_logs"}[5m]))
         /
         sum(rate(vector_component_received_events_total{component_id="kubernetes_logs"}[5m]))
 
@@ -44,9 +44,9 @@ spec:
     # Values >1.0 indicate S3 draining the queue (catching up from previous backlog)
     - record: vector:s3_sink:write_ratio
       expr: |
-        sum(rate(vector_component_sent_events_total{component_id="hcp_logs"}[5m]))
+        sum(rate(vector_component_sent_events_total{component_id="s3_logs"}[5m]))
         /
-        sum(rate(vector_component_received_events_total{component_id="hcp_logs"}[5m]))
+        sum(rate(vector_component_received_events_total{component_id="s3_logs"}[5m]))
 
     # Total log ingestion rate across all HCP clusters
     # Useful for capacity planning and baseline metrics
@@ -61,7 +61,7 @@ spec:
     # Should be close to ingestion_rate (within ~15%) in steady state
     - record: vector:logs:s3_delivery_rate
       expr: |
-        sum(rate(vector_component_sent_events_total{component_id="hcp_logs"}[5m]))
+        sum(rate(vector_component_sent_events_total{component_id="s3_logs"}[5m]))
 
     # Per-pod log ingestion rate
     # Identifies which Vector pods/nodes are receiving high log volume from their assigned HCP clusters
@@ -78,7 +78,7 @@ spec:
     - record: vector:logs:s3_delivery_rate:by_pod
       expr: |
         sum by (pod, node) (
-          rate(vector_component_sent_events_total{component_id="hcp_logs"}[5m])
+          rate(vector_component_sent_events_total{component_id="s3_logs"}[5m])
         )
 
     # Per-pod write ratio (S3 delivery / ingestion)
@@ -88,7 +88,7 @@ spec:
     - record: vector:logs:write_ratio:by_pod
       expr: |
         sum by (pod, node) (
-          rate(vector_component_sent_events_total{component_id="hcp_logs"}[5m])
+          rate(vector_component_sent_events_total{component_id="s3_logs"}[5m])
         )
         /
         sum by (pod, node) (
@@ -106,11 +106,14 @@ spec:
 
     # CRITICAL: Vector has stopped collecting logs from HCP pods entirely
     # This indicates a complete failure of log collection
+    # Only fires if HCP pods exist (prevents false positive on empty management clusters)
     # Possible causes: Vector pods down, permissions issues, k8s API problems
     # TEMPORARILY WARNING: Set to warning for initial validation
     - alert: VectorNoLogsIngestedSRE
       expr: |
         sum(rate(vector_component_received_events_total{component_id="kubernetes_logs"}[5m])) == 0
+          and
+        count(kube_pod_info{namespace=~"ocm-.*-.*-.*"}) > 0
       for: 5m
       labels:
         severity: warning
@@ -126,7 +129,7 @@ spec:
     # TEMPORARILY WARNING: Set to warning for initial validation
     - alert: VectorS3WritesStoppedSRE
       expr: |
-        sum(rate(vector_component_sent_events_total{component_id="hcp_logs"}[5m])) == 0
+        sum(rate(vector_component_sent_events_total{component_id="s3_logs"}[5m])) == 0
       for: 5m
       labels:
         severity: warning
@@ -169,7 +172,7 @@ spec:
     # If buffer reaches 100%, Vector will BLOCK log collection (when_full: block)
     - alert: VectorBufferNearCapacitySRE
       expr: |
-        vector_buffer_byte_size{buffer_id="hcp_logs"} > 7516192768
+        vector_buffer_byte_size{buffer_id="s3_logs"} > 7516192768
       for: 10m
       labels:
         severity: warning
@@ -184,7 +187,7 @@ spec:
     # Possible causes: Throttling, temporary connectivity issues, partial IAM permissions
     - alert: VectorS3ErrorsSRE
       expr: |
-        sum(rate(vector_component_errors_total{component_id="hcp_logs"}[5m])) > 0
+        sum(rate(vector_component_errors_total{component_id="s3_logs"}[5m])) > 0
       for: 5m
       labels:
         severity: warning
@@ -200,9 +203,9 @@ spec:
     - alert: VectorS3WriteBackpressureSRE
       expr: |
         (
-          sum(rate(vector_component_sent_events_total{component_id="hcp_logs"}[5m]))
+          sum(rate(vector_component_sent_events_total{component_id="s3_logs"}[5m]))
           /
-          sum(rate(vector_component_received_events_total{component_id="hcp_logs"}[5m]))
+          sum(rate(vector_component_received_events_total{component_id="s3_logs"}[5m]))
         ) < 0.95
       for: 30m
       labels:
@@ -219,7 +222,7 @@ spec:
     - alert: VectorPipelineLossSRE
       expr: |
         (
-          sum(rate(vector_component_sent_events_total{component_id="hcp_logs"}[5m]))
+          sum(rate(vector_component_sent_events_total{component_id="s3_logs"}[5m]))
           /
           sum(rate(vector_component_received_events_total{component_id="kubernetes_logs"}[5m]))
         ) < 0.98
@@ -265,7 +268,7 @@ spec:
     # Could indicate S3 throttling, increasing log volume, or insufficient S3 write capacity
     - alert: VectorBufferGrowingRapidlySRE
       expr: |
-        deriv(vector_buffer_byte_size{buffer_id="hcp_logs"}[5m]) > 1677721.6
+        deriv(vector_buffer_byte_size{buffer_id="s3_logs"}[5m]) > 1677721.6
       for: 10m
       labels:
         severity: warning
