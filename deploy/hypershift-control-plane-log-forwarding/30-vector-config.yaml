@@ -67,8 +67,8 @@ data:
               .message, conversion_err = to_string(.message)
               if conversion_err != null {
                 # If to_string fails, set placeholder with error details for debugging
-                err_str = string!(conversion_err)
-                .message = "[MESSAGE_CONVERSION_ERROR: " + err_str + "]"
+                err_str, _ = string(conversion_err)
+                .message = "[MESSAGE_CONVERSION_ERROR: " + (err_str ?? "unknown error") + "]"
               }
             } else {
               # Field is completely missing - set placeholder for debugging
